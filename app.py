@@ -39,29 +39,49 @@ data = {
 st.set_page_config(page_title="内部監査チェックシート", layout="wide")
 st.title("Imaging CRO 内部監査チェックシート")
 
-# 基本情報
+st.markdown("""
+株式会社リジット  
+コード開発者：代表および信頼性保証責任者  
+山本修司
+""")
+
 auditor = st.text_input("監査者名")
 audit_date = st.date_input("監査日", value=date.today())
 
-# 入力欄
 records = []
 
 for section, items in data.items():
     st.header(section)
     for item in items:
-        col1, col2 = st.columns([1, 3])
-        checked = col1.checkbox(item, key=item)  # ✅ ラベルを項目名に修正
+        col1, col2 = st.columns([2, 3])
+        status = col1.radio("対応状況", ["未確認", "確認済", "要修正"], key=f"status_{item}")
         comment = col2.text_input("コメント", key=f"comment_{item}")
         records.append({
             "カテゴリ": section,
             "項目": item,
-            "チェック済": checked,
+            "対応状況": status,
             "コメント": comment
         })
 
-# 保存処理
+# 7. 特記事項
+st.header("7. 特記事項")
+st.text_area("内部監査で確認された特記事項", height=100, key="special_notes")
+
+# 監査結果の評価
+st.subheader("監査結果の評価（顧問記入）")
+eval_options = ["優", "良", "可", "不可"]
+eval_1 = st.selectbox("総合的な体制整備", eval_options)
+eval_2 = st.selectbox("SOP運用の実効性", eval_options)
+eval_3 = st.selectbox("データ管理とセキュリティ", eval_options)
+eval_4 = st.selectbox("継続的改善の姿勢", eval_options)
+
 if st.button("保存する"):
     df = pd.DataFrame(records)
+    df["特記事項"] = st.session_state["special_notes"]
+    df["総合的な体制整備"] = eval_1
+    df["SOP運用の実効性"] = eval_2
+    df["データ管理とセキュリティ"] = eval_3
+    df["継続的改善の姿勢"] = eval_4
     filename = f"audit_{audit_date}_{auditor.replace(' ', '_')}.csv"
     df.to_csv(filename, index=False)
     st.success(f"保存しました: {filename}")
