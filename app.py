@@ -54,6 +54,7 @@ for section, items in data.items():
     st.header(section)
     for item in items:
         col1, col2 = st.columns([2, 3])
+        col1.markdown(f"**項目：{item}**")
         status = col1.radio("対応状況", ["未確認", "確認済", "要修正"], key=f"status_{item}")
         comment = col2.text_input("コメント", key=f"comment_{item}")
         records.append({
