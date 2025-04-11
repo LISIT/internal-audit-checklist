@@ -36,18 +36,21 @@ data = {
     ]
 }
 
+st.set_page_config(page_title="内部監査チェックシート", layout="wide")
 st.title("Imaging CRO 内部監査チェックシート")
 
+# 基本情報
 auditor = st.text_input("監査者名")
 audit_date = st.date_input("監査日", value=date.today())
 
+# 入力欄
 records = []
 
 for section, items in data.items():
     st.header(section)
     for item in items:
         col1, col2 = st.columns([1, 3])
-        checked = col1.checkbox("チェック済", key=item)
+        checked = col1.checkbox(item, key=item)  # ✅ ラベルを項目名に修正
         comment = col2.text_input("コメント", key=f"comment_{item}")
         records.append({
             "カテゴリ": section,
@@ -56,8 +59,10 @@ for section, items in data.items():
             "コメント": comment
         })
 
+# 保存処理
 if st.button("保存する"):
     df = pd.DataFrame(records)
     filename = f"audit_{audit_date}_{auditor.replace(' ', '_')}.csv"
     df.to_csv(filename, index=False)
     st.success(f"保存しました: {filename}")
+    st.download_button("CSVをダウンロード", data=df.to_csv(index=False), file_name=filename, mime="text/csv")
