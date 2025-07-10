@@ -1,6 +1,32 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import io
+import base64
+
+# 日本語フォントの設定
+try:
+    # reportlab-japanese-fontsがインストールされている場合
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiMin-W3'))
+    JAPANESE_FONT = 'HeiseiMin-W3'
+except ImportError:
+    # フォールバック: システムフォントを使用
+    try:
+        # Windows の日本語フォント
+        pdfmetrics.registerFont(TTFont('YuGothic', 'C:/Windows/Fonts/yu Gothic.ttc'))
+        JAPANESE_FONT = 'YuGothic'
+    except:
+        # デフォルトフォント
+        JAPANESE_FONT = 'Helvetica'
 
 st.set_page_config(page_title="内部品質管理チェック：業務品質確認シート", layout="wide")
 st.title("内部品質管理チェック：業務品質確認シート")
@@ -66,11 +92,115 @@ for i, item in enumerate(check_items, 1):
 st.header("特記事項")
 st.text_area("その他、記載すべき事項", height=100, key="special_notes")
 
+def generate_pdf_report(records, auditor, audit_date, special_notes):
+    """PDFレポートを生成する関数"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # 日本語フォントを使用したスタイル設定
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        textColor=colors.darkblue,
+        fontName=JAPANESE_FONT
+    )
+    
+    # 日本語フォントを使用した通常スタイル
+    normal_style = ParagraphStyle(
+        'JapaneseNormal',
+        parent=styles['Normal'],
+        fontName=JAPANESE_FONT,
+        fontSize=10
+    )
+    
+    # 日本語フォントを使用した見出しスタイル
+    heading_style = ParagraphStyle(
+        'JapaneseHeading',
+        parent=styles['Heading2'],
+        fontName=JAPANESE_FONT,
+        fontSize=14,
+        spaceAfter=10
+    )
+    
+    # ヘッダー情報
+    story.append(Paragraph("内部品質管理チェック：業務品質確認シート", title_style))
+    story.append(Spacer(1, 20))
+    
+    # 会社情報
+    company_info = f"""
+    <b>株式会社リジット</b><br/>
+    コード作成責任者：品質管理担当者
+    """
+    story.append(Paragraph(company_info, normal_style))
+    story.append(Spacer(1, 20))
+    
+    # 監査情報
+    audit_info = f"""
+    <b>品質管理責任者：</b>{auditor}<br/>
+    <b>記入日：</b>{audit_date}
+    """
+    story.append(Paragraph(audit_info, normal_style))
+    story.append(Spacer(1, 30))
+    
+    # 各チェック項目の結果
+    for record in records:
+        story.append(Paragraph(f"<b>{record['項目']}</b>", heading_style))
+        story.append(Paragraph(record['説明'], normal_style))
+        story.append(Spacer(1, 10))
+        
+        # 対応状況とコメント
+        result_text = f"""
+        <b>対応状況：</b>{record['対応状況']}<br/>
+        <b>コメント：</b>{record['コメント']}
+        """
+        story.append(Paragraph(result_text, normal_style))
+        story.append(Spacer(1, 15))
+    
+    # 特記事項
+    story.append(Paragraph("<b>特記事項</b>", heading_style))
+    story.append(Paragraph(special_notes, normal_style))
+    story.append(Spacer(1, 20))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 # 保存
 if st.button("保存する"):
     df = pd.DataFrame(records)
     df["特記事項"] = st.session_state["special_notes"]
-    filename = f"品質管理チェック_{audit_date}_{auditor.replace(' ', '_')}.csv"
-    df.to_csv(filename, index=False)
-    st.success(f"保存しました: {filename}")
-    st.download_button("CSVをダウンロード", data=df.to_csv(index=False), file_name=filename, mime="text/csv")
+    
+    # ファイル名のベース部分
+    base_filename = f"品質管理チェック_{audit_date}_{auditor.replace(' ', '_')}"
+    
+    # CSVファイルの保存
+    csv_filename = f"{base_filename}.csv"
+    df.to_csv(csv_filename, index=False)
+    
+    # PDFファイルの生成
+    pdf_buffer = generate_pdf_report(records, auditor, audit_date, st.session_state["special_notes"])
+    pdf_filename = f"{base_filename}.pdf"
+    
+    st.success(f"保存しました: {csv_filename}, {pdf_filename}")
+    
+    # ダウンロードボタン
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "CSVをダウンロード", 
+            data=df.to_csv(index=False), 
+            file_name=csv_filename, 
+            mime="text/csv"
+        )
+    with col2:
+        st.download_button(
+            "PDFをダウンロード", 
+            data=pdf_buffer.getvalue(), 
+            file_name=pdf_filename, 
+            mime="application/pdf"
+        )

@@ -1,2 +1,5 @@
 streamlit
 pandas
+reportlab
+reportlab-japanese-fonts
+typing-extensions>=4.10.0
